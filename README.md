@@ -20,48 +20,33 @@ This project requires Python 3.11-3.13.
 
     $ git clone https://github.com/erikshelley/matrix-webcam.git
     $ cd matrix-webcam
-    $ python -m pip install -e .
-    $ python -m matrix_webcam
 
-To install in an isolated virtual environment instead:
+| Environment          | Setup           | Run           |
+| -------------------- | --------------- | ------------- |
+| Windows PowerShell   | `.\setup.ps1`   | `.\run.ps1`   |
+| Linux, macOS, or WSL | `bash setup.sh` | `bash run.sh` |
 
-Create it with Python 3.11, 3.12, or 3.13. If `.venv` was created with another version, remove it and recreate it.
+The setup scripts create `.venv` with Python 3.13 by default and install the project there. To use Python 3.11 or 3.12 instead, run `./setup.ps1 -PythonVersion 3.12` in PowerShell or `PYTHON_VERSION=3.12 bash setup.sh` on Linux, macOS, or WSL.
 
-| Environment     | Command                    |
-| --------------- | -------------------------- |
-| Windows         | `py -3.13 -m venv .venv`   |
-| Linux/macOS/WSL | `python3.13 -m venv .venv` |
+## Configuration
 
-Activate the virtual environment:
-
-| Environment     | Command                        |
-| --------------- | ------------------------------ |
-| PowerShell      | `.\.venv\Scripts\Activate.ps1` |
-| Linux/macOS/WSL | `. .venv/bin/activate`         |
-
-Install dependencies in the virtual environment, then run it.
-
-    $ python -m pip install -e .
-    $ python -m matrix_webcam
-
-After installing the project in `.venv`, you can run it later without activating the virtual environment:
-
-| Environment     | Command                                       |
-| --------------- | --------------------------------------------- |
-| PowerShell      | `.\.venv\Scripts\python.exe -m matrix_webcam` |
-| Linux/macOS/WSL | `./.venv/bin/python -m matrix_webcam`         |
+Edit [matrix-webcam.toml](matrix-webcam.toml) to set defaults for all runtime options. The run scripts load it automatically. Command-line options override the file; for example, `./run.ps1 --width 1920` uses the configured values except for `width`.
 
 ## Increasing Resolution
 
-A local OpenCV window opens at a requested 1280x720 resolution and you can use Zoom's screen/window capture to show it.
+The default resolution of the local OpenCV window is 1280x720.
+You can use Zoom's screen/window capture to show it.
 The preview requires a graphical display server. On WSL, use WSLg or configure an X server, and ensure the distribution can access the webcam. Native Windows is recommended for the simplest setup.
+WSLg is available in modern WSL installations but is not guaranteed with WSL2. In Windows PowerShell, run `wsl --version`; if the output includes a WSLg version, it is available. If it is missing, try `wsl --update`, then restart WSL with `wsl --shutdown`. If WSLg remains unavailable, configure an X server instead.
 For a 1080p-capable webcam, request full HD with:
 
-    $ python -m matrix_webcam --width 1920 --height 1080
+    $ .\run.ps1 --width 1920 --height 1080
+    $ bash run.sh --width 1920 --height 1080
 
 To make the Matrix characters smaller while preserving that resolution, add `--cell-size 8`:
 
-    $ python -m matrix_webcam --width 1920 --height 1080 --cell-size 8
+    $ .\run.ps1 --width 1920 --height 1080 --cell-size 8
+    $ bash run.sh --width 1920 --height 1080 --cell-size 8
 
 The default cell size is 14 pixels. Smaller values increase visual detail but require more processing.
 The app prints the resolution actually provided by the camera at startup.

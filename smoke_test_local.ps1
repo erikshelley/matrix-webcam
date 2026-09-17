@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$venvPython = Join-Path $PSScriptRoot ".venv311\Scripts\python.exe"
+$venvPython = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
 if (-not (Test-Path $venvPython)) {
     throw "Could not find virtual environment at $venvPython"
 }

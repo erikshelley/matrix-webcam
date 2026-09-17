@@ -4,6 +4,8 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+import tomllib
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -11,12 +13,48 @@ import numpy as np
 from matrix_webcam.rain import MatrixRain
 from matrix_webcam.segmentation import SelfieSegmenter
 
+_CONFIG_FILE = Path("matrix-webcam.toml")
+_CONFIG_KEYS = {
+    "device",
+    "letters",
+    "probability",
+    "updates_per_second",
+    "width",
+    "height",
+    "cell_size",
+    "output",
+}
+
 
 def _positive_int(value: str) -> int:
     parsed_value = int(value)
     if parsed_value < 1:
         raise argparse.ArgumentTypeError("must be a positive integer")
     return parsed_value
+
+
+def _load_config(parser: argparse.ArgumentParser) -> dict[str, object]:
+    """Load supported CLI defaults from matrix-webcam.toml in the current directory."""
+    if not _CONFIG_FILE.is_file():
+        return {}
+
+    try:
+        with _CONFIG_FILE.open("rb") as config_file:
+            config = tomllib.load(config_file)
+    except tomllib.TOMLDecodeError as error:
+        parser.error(f"Could not parse {_CONFIG_FILE}: {error}")
+
+    unknown_keys = set(config) - _CONFIG_KEYS
+    if unknown_keys:
+        parser.error(f"Unknown setting in {_CONFIG_FILE}: {', '.join(sorted(unknown_keys))}")
+
+    for key in _CONFIG_KEYS - {"output"}:
+        if key in config and (not isinstance(config[key], int) or isinstance(config[key], bool)):
+            parser.error(f"{key} in {_CONFIG_FILE} must be an integer")
+    if "output" in config and config["output"] != "preview":
+        parser.error(f"output in {_CONFIG_FILE} must be 'preview'")
+
+    return config
 
 
 def parse_args() -> argparse.Namespace:
@@ -74,6 +112,7 @@ def parse_args() -> argparse.Namespace:
         default="preview",
         help="Render to a local OpenCV preview window.",
     )
+    parser.set_defaults(**_load_config(parser))
     return parser.parse_args()
 
 

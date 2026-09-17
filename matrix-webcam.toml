@@ -1,0 +1,9 @@
+# Command-line options can override these values.
+device = 0
+letters = 2
+probability = 5
+updates_per_second = 15
+width = 1280
+height = 720
+cell_size = 14
+output = "preview"
