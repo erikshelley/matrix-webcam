@@ -18,7 +18,7 @@ _CACHE_DIR = pathlib.Path.home() / ".cache" / "matrix_webcam"
 _MODEL_PATH = _CACHE_DIR / "selfie_segmenter.tflite"
 
 # Matches the confidence threshold the original mediapipe Solutions-API code used.
-CONFIDENCE_THRESHOLD = 0.95
+DEFAULT_CONFIDENCE_THRESHOLD = 0.95
 
 
 def _resolve_model_path() -> pathlib.Path:
@@ -32,7 +32,7 @@ def _resolve_model_path() -> pathlib.Path:
 class SelfieSegmenter:
     """Wraps mediapipe's Tasks-API ImageSegmenter for per-frame person/background masking."""
 
-    def __init__(self) -> None:
+    def __init__(self, confidence_threshold: float = DEFAULT_CONFIDENCE_THRESHOLD) -> None:
         options = vision.ImageSegmenterOptions(
             base_options=python.BaseOptions(model_asset_path=str(_resolve_model_path())),
             running_mode=vision.RunningMode.VIDEO,
@@ -40,6 +40,7 @@ class SelfieSegmenter:
             output_confidence_masks=True,
         )
         self._segmenter = vision.ImageSegmenter.create_from_options(options)
+        self._confidence_threshold = confidence_threshold
         self._last_timestamp_ms = -1
 
     def segment(self, frame_rgb: npt.NDArray[np.uint8], timestamp_ms: int) -> npt.NDArray[np.bool_]:
@@ -51,7 +52,7 @@ class SelfieSegmenter:
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
         result = self._segmenter.segment_for_video(mp_image, timestamp_ms)
         confidence = result.confidence_masks[0].numpy_view()
-        return np.asarray(confidence > CONFIDENCE_THRESHOLD, dtype=np.bool_)
+        return np.asarray(confidence > self._confidence_threshold, dtype=np.bool_)
 
     def close(self) -> None:
         self._segmenter.close()

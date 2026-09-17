@@ -11,7 +11,7 @@ import cv2
 import numpy as np
 
 from matrix_webcam.rain import MatrixRain
-from matrix_webcam.segmentation import SelfieSegmenter
+from matrix_webcam.segmentation import DEFAULT_CONFIDENCE_THRESHOLD, SelfieSegmenter
 
 _CONFIG_FILE = Path("matrix-webcam.toml")
 _CONFIG_KEYS = {
@@ -23,6 +23,7 @@ _CONFIG_KEYS = {
     "height",
     "cell_size",
     "output",
+    "segmentation_threshold",
 }
 
 
@@ -30,6 +31,13 @@ def _positive_int(value: str) -> int:
     parsed_value = int(value)
     if parsed_value < 1:
         raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed_value
+
+
+def _confidence_threshold(value: str) -> float:
+    parsed_value = float(value)
+    if not 0.0 <= parsed_value <= 1.0:
+        raise argparse.ArgumentTypeError("must be between 0.0 and 1.0")
     return parsed_value
 
 
@@ -49,8 +57,18 @@ def _load_config(parser: argparse.ArgumentParser) -> dict[str, object]:
         parser.error(f"Unknown setting in {_CONFIG_FILE}: {', '.join(sorted(unknown_keys))}")
 
     for key in _CONFIG_KEYS - {"output"}:
+        if key == "segmentation_threshold":
+            continue
         if key in config and (not isinstance(config[key], int) or isinstance(config[key], bool)):
             parser.error(f"{key} in {_CONFIG_FILE} must be an integer")
+    if "segmentation_threshold" in config:
+        threshold = config["segmentation_threshold"]
+        if (
+            not isinstance(threshold, (int, float))
+            or isinstance(threshold, bool)
+            or not 0.0 <= threshold <= 1.0
+        ):
+            parser.error(f"segmentation_threshold in {_CONFIG_FILE} must be between 0.0 and 1.0")
     if "output" in config and config["output"] != "preview":
         parser.error(f"output in {_CONFIG_FILE} must be 'preview'")
 
@@ -107,6 +125,12 @@ def parse_args() -> argparse.Namespace:
         help="Matrix character-cell size in pixels; smaller values increase detail.",
     )
     parser.add_argument(
+        "--segmentation-threshold",
+        type=_confidence_threshold,
+        default=DEFAULT_CONFIDENCE_THRESHOLD,
+        help="Foreground confidence required for a pixel to be shown.",
+    )
+    parser.add_argument(
         "--output",
         choices=("preview",),
         default="preview",
@@ -136,7 +160,7 @@ def _render_loop(args: argparse.Namespace, cap: cv2.VideoCapture) -> int:
         cell_size=args.cell_size,
     )
 
-    with SelfieSegmenter() as segmenter:
+    with SelfieSegmenter(args.segmentation_threshold) as segmenter:
         while True:
             success, frame = cap.read()
             if not success or frame is None:
