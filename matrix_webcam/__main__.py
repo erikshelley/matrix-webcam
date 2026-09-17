@@ -1,37 +1,26 @@
-"""Shows your webcam video - Matrix style"""
-import argparse
-import random
-import signal
-import time
-from string import printable
-from typing import Optional, Any
+"""Matrix webcam effect rendered in a local preview window."""
+from __future__ import annotations
 
-import _curses
+import argparse
+import sys
+import time
+
 import cv2
 import numpy as np
-import numpy.typing as npt
-from mediapipe.python.solutions.selfie_segmentation import SelfieSegmentation
 
-curses: Any = _curses  # ignore mypy
-ASCII_CHARS = [" ", "@", "#", "$", "%", "?", "*", "+", ";", ":", ",", "."]
+from matrix_webcam.rain import MatrixRain
+from matrix_webcam.segmentation import SelfieSegmenter
 
 
-def ascii_image(
-    image: npt.NDArray[np.uint8], width: int, height: int, linebreak: bool = False
-) -> str:
-    """Turns a numpy image into rich-CLI ascii image"""
-    image = cv2.resize(image, (width, height))
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    ascii_str = ""
-    for (_, x), pixel in np.ndenumerate(gray):  # pylint: disable=C0103
-        ascii_str += ASCII_CHARS[int(pixel / (256 / len(ASCII_CHARS)))]
-        if linebreak and x == image.shape[1] - 1:
-            ascii_str += "\n"
-    return ascii_str
+def _positive_int(value: str) -> int:
+    parsed_value = int(value)
+    if parsed_value < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed_value
 
 
 def parse_args() -> argparse.Namespace:
-    """Parses width and height in characters from CLI."""
+    """Parses the webcam, rain-effect, and output-mode settings from the CLI."""
     parser = argparse.ArgumentParser(description="matrix-webcam")
     parser.add_argument(
         "-d",
@@ -61,155 +50,114 @@ def parse_args() -> argparse.Namespace:
         default=15,
         help="The number of updates to perform per second.",
     )
+    parser.add_argument(
+        "--width",
+        type=int,
+        default=1280,
+        help="Requested preview width in pixels.",
+    )
+    parser.add_argument(
+        "--height",
+        type=int,
+        default=720,
+        help="Requested preview height in pixels.",
+    )
+    parser.add_argument(
+        "--cell-size",
+        type=_positive_int,
+        default=14,
+        help="Matrix character-cell size in pixels; smaller values increase detail.",
+    )
+    parser.add_argument(
+        "--output",
+        choices=("preview",),
+        default="preview",
+        help="Render to a local OpenCV preview window.",
+    )
     return parser.parse_args()
 
 
-def main() -> None:
-    """Main loop."""
+def _open_capture(device: int) -> cv2.VideoCapture:
+    """Open the selected local webcam device or exit with a clear message."""
+    cap = cv2.VideoCapture(device)
+    if not cap.isOpened():
+        raise RuntimeError(f"Could not open webcam device index {device}.")
+    return cap
+
+
+def _render_loop(args: argparse.Namespace, cap: cv2.VideoCapture) -> int:
+    """Render the processed frames in a local preview window."""
+    window_name = "matrix-webcam"
+    rain = MatrixRain(
+        width=int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 640),
+        height=int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 480),
+        letters=args.letters,
+        probability=args.probability,
+        updates_per_second=float(args.updates_per_second),
+        cell_size=args.cell_size,
+    )
+
+    with SelfieSegmenter() as segmenter:
+        while True:
+            success, frame = cap.read()
+            if not success or frame is None:
+                print("Ignoring empty camera frame.", file=sys.stderr)
+                continue
+
+            frame_rgb = cv2.cvtColor(cv2.flip(frame, 1), cv2.COLOR_BGR2RGB).astype(
+                np.uint8, copy=False
+            )
+            mask = segmenter.segment(frame_rgb, int(time.monotonic() * 1000))
+            frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR).astype(np.uint8, copy=False)
+            output = rain.render(frame_bgr, mask)
+
+            cv2.imshow(window_name, output)
+            key = cv2.waitKey(1) & 0xFF
+            if key in (27, ord("q")):
+                break
+            if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
+                break
+
+    return 0
+
+
+def main() -> int:
+    """Capture webcam frames, segment the person, render the matrix effect, and stream it."""
     args = parse_args()
 
     cap = cv2.VideoCapture(args.device)
     if not cap.isOpened():
-        print("No VideoCapture found!")
-        cap.release()
-        return
+        print(f"No webcam found for device index {args.device}.", file=sys.stderr)
+        return 1
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
 
-    # os.system("cls" if os.name == "nt" else "clear")
-    stdscr = init_curses()
-
-    signal.signal(signal.SIGINT, lambda signal, frame: terminate(cap, stdscr))
-
-    size = stdscr.getmaxyx()
-    height, width = size
-
-    # background is a matrix of the actual letters (not lit up) -- the underlay.
-    # foreground is a binary matrix representing the position of lit letters -- the overlay.
-    # dispense is where new 'streams' of lit letters appear from.
-    background = rand_string(printable.strip(), width * height)
-    foreground: list[tuple[int, int]] = []
-    dispense: list[int] = []
-
-    delta = 0
-    bg_refresh_counter = random.randint(3, 7)
-    perf_counter = time.perf_counter()
-
-    bg_image: Optional[npt.NDArray[np.uint8]] = None
-    with SelfieSegmentation(model_selection=1) as selfie_segmentation:
-        while cap.isOpened():
-            success, image = cap.read()
-
-            if not success:
-                print("Ignoring empty camera frame.")
-                # If loading a video, use 'break' instead of 'continue'.
-                continue
-
-            # Flip the image horizontally for a later selfie-view display, and convert
-            # the BGR image to RGB.
-            image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
-            # To improve performance, optionally mark the image as not writeable to
-            # pass by reference.
-            image.flags.writeable = False
-            results = selfie_segmentation.process(image)
-
-            image.flags.writeable = True
-            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-
-            # Draw selfie segmentation on the background image.
-            # To improve segmentation around boundaries, consider applying a joint
-            # bilateral filter to "results.segmentation_mask" with "image".
-            condition = np.stack((results.segmentation_mask,) * 3, axis=-1) > 0.95
-            # The background can be customized.
-            #   a) Load an image (with the same width and height of the input image) to
-            #      be the background, e.g., bg_image = cv2.imread('/path/to/image/file')
-            #   b) Blur the input image by applying image filtering, e.g.,
-            #      bg_image = cv2.GaussianBlur(image,(55,55),0)
-            if bg_image is None:
-                bg_image = np.zeros(image.shape, dtype=np.uint8)
-            output_image = np.where(condition, image, bg_image)
-
-            stdscr.clear()
-
-            string = ascii_image(output_image, width, height)[:-1]
-            for idx, val in enumerate(string):
-                if not val:
-                    continue
-                stdscr.addstr(idx // width, idx % width, val, curses.color_pair(1))
-
-            now = time.perf_counter()
-            delta += (now - perf_counter) * abs(args.updates_per_second)
-            perf_counter = now
-            update_matrix = delta >= 1
-
-            for idx, (row, col) in enumerate(foreground):
-                if row < size[0] - 1:
-                    stdscr.addstr(
-                        row,
-                        col,
-                        background[row * size[0] + col],
-                        curses.color_pair(1),
-                    )
-
-                    if update_matrix:
-                        foreground[idx] = (row + 1, col)
-                else:
-                    del foreground[idx]
-
-            if update_matrix:
-                for _ in range(abs(args.letters)):
-                    dispense.append(random.randint(0, width - 1))
-
-                for idx, column in enumerate(dispense):
-                    foreground.append((0, column))
-                    if not random.randint(0, args.probability - 1):
-                        del dispense[idx]
-                delta -= 1
-
-            bg_refresh_counter -= 1
-            if bg_refresh_counter <= 0:
-                background = rand_string(printable.strip(), height * width)
-                bg_refresh_counter = random.randint(3, 7)
-
-            stdscr.refresh()
-
-            stdscr.nodelay(True)  # Don't block waiting for input.
-            char_input = stdscr.getch()
-            if cv2.waitKey(1) & 0xFF == 27 or char_input in (3, 27):  # ESC pressed
+    try:
+        frame = None
+        for _attempt in range(1, 6):
+            success, frame = cap.read()
+            if success and frame is not None:
                 break
+            time.sleep(0.25)
 
-    terminate(cap, stdscr)
+        if frame is None or not success:
+            print(
+                "Could not read a frame from the webcam. If another app is already using the "
+                "camera, close it or choose a different device index.",
+                file=sys.stderr,
+            )
+            return 1
 
+        print(f"Preview resolution: {frame.shape[1]}x{frame.shape[0]}")
+        return _render_loop(args, cap)
 
-def terminate(cap: Any, stdscr: Any) -> None:
-    """# OpenCV and curses shutdown"""
-    cap.release()
-    cv2.destroyAllWindows()
-
-    stdscr.keypad(False)
-    curses.echo()
-    curses.endwin()
-
-
-def init_curses() -> Any:
-    """Initializes curses library"""
-    stdscr = curses.initscr()
-    curses.curs_set(False)  # no blinking cursor
-    stdscr.keypad(True)  # if not set will end program on arrow keys etc
-    curses.noecho()  # do not echo keypress
-
-    curses.start_color()
-    curses.use_default_colors()
-    curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
-    return stdscr
-
-
-def rand_string(character_set: str, length: int) -> str:
-    """
-    Returns a random string.
-    character_set -- the characters to choose from.
-    length        -- the length of the string.
-    """
-    return "".join(random.choice(character_set) for _ in range(length))
+    except KeyboardInterrupt:
+        print("\nStopping matrix-webcam.")
+        return 0
+    finally:
+        cap.release()
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
