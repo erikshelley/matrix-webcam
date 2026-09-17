@@ -29,7 +29,7 @@ dev = ["pre-commit", "mypy>=1.10", "black>=24.0", "ruff>=0.6"]
 deploy = ["wheel", "twine", "build", "setuptools"]
 
 [project.urls]
-Homepage = "https://github.com/joschuck/matrix-webcam"
+Homepage = "https://github.com/erikshelley/matrix-webcam"
 
 [project.scripts]
 matrix-webcam = "matrix_webcam.__main__:main"

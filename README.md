@@ -1,8 +1,8 @@
 # matrix-webcam
 
 [![PyPI version](https://badge.fury.io/py/matrix-webcam.svg)](https://badge.fury.io/py/matrix-webcam)
-[![License MIT](https://img.shields.io/github/license/joschuck/matrix-webcam.svg)](https://github.com/joschuck/matrix-webcam/blob/main/LICENSE)
-[![issues](https://img.shields.io/github/issues/joschuck/matrix-webcam.svg)](https://github.com/joschuck/matrix-webcam/issues)
+[![License MIT](https://img.shields.io/github/license/erikshelley/matrix-webcam.svg)](https://github.com/erikshelley/matrix-webcam/blob/main/LICENSE)
+[![issues](https://img.shields.io/github/issues/erikshelley/matrix-webcam.svg)](https://github.com/erikshelley/matrix-webcam/issues)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
 
@@ -10,21 +10,51 @@ This package displays your webcam video feed as a matrix-rain effect.
 
 Take your next video conference from within the matrix!
 
-![matrix-webcam demo](https://raw.githubusercontent.com/joschuck/matrix-webcam/main/doc/matrix-webcam02.gif)
+![matrix-webcam demo](https://raw.githubusercontent.com/erikshelley/matrix-webcam/main/doc/matrix-webcam02.gif)
 
 ## Running it
 
 Install from source:
 
-    $ git clone https://github.com/joschuck/matrix-webcam.git
+This project requires Python 3.11-3.13.
+
+    $ git clone https://github.com/erikshelley/matrix-webcam.git
     $ cd matrix-webcam
     $ python -m pip install -e .
+    $ python -m matrix_webcam
 
-Then run the local preview mode:
+To install in an isolated virtual environment instead:
 
-    $ python -m matrix_webcam --output preview
+Create it with Python 3.11, 3.12, or 3.13. If `.venv` was created with another version, remove it and recreate it.
+
+| Environment     | Command                    |
+| --------------- | -------------------------- |
+| Windows         | `py -3.13 -m venv .venv`   |
+| Linux/macOS/WSL | `python3.13 -m venv .venv` |
+
+Activate the virtual environment:
+
+| Environment     | Command                        |
+| --------------- | ------------------------------ |
+| PowerShell      | `.\.venv\Scripts\Activate.ps1` |
+| Linux/macOS/WSL | `. .venv/bin/activate`         |
+
+Install dependencies in the virtual environment, then run it.
+
+    $ python -m pip install -e .
+    $ python -m matrix_webcam
+
+After installing the project in `.venv`, you can run it later without activating the virtual environment:
+
+| Environment     | Command                                       |
+| --------------- | --------------------------------------------- |
+| PowerShell      | `.\.venv\Scripts\python.exe -m matrix_webcam` |
+| Linux/macOS/WSL | `./.venv/bin/python -m matrix_webcam`         |
+
+## Increasing Resolution
 
 A local OpenCV window opens at a requested 1280x720 resolution and you can use Zoom's screen/window capture to show it.
+The preview requires a graphical display server. On WSL, use WSLg or configure an X server, and ensure the distribution can access the webcam. Native Windows is recommended for the simplest setup.
 For a 1080p-capable webcam, request full HD with:
 
     $ python -m matrix_webcam --width 1920 --height 1080
@@ -39,24 +69,17 @@ Close the window with its title-bar X, or focus it and press `Esc` or `q` to sto
 
 ### Usage
 
-    usage: matrix-webcam [-h] [-d DEVICE] [-l LETTERS] [-p PROBABILITY] [-u UPDATES_PER_SECOND] [--width WIDTH] [--height HEIGHT] [--cell-size CELL_SIZE] [--output {preview}]
-
-    options:
-    -h, --help            show this help message and exit
-    -d DEVICE, --device DEVICE
-                        Sets the index of the webcam if you have more than one webcam.
-    -l LETTERS, --letters LETTERS
-                        The number of letters produced per update.
-    -p PROBABILITY, --probability PROBABILITY
-                        1/p probability of a dispense point deactivating each tick.
-    -u UPDATES_PER_SECOND, --updates-per-second UPDATES_PER_SECOND
-                        The number of updates to perform per second.
-    --width WIDTH       Requested preview width in pixels.
-    --height HEIGHT     Requested preview height in pixels.
-    --cell-size CELL_SIZE
-                        Matrix character-cell size in pixels; smaller values increase detail.
-    --output {preview}
-                        Render to a local OpenCV preview window.
+| Option                                                             | Default   | Description                                                                 |
+| ------------------------------------------------------------------ | --------- | --------------------------------------------------------------------------- |
+| `-h`, `--help`                                                     | N/A       | Show help and exit.                                                         |
+| `-d DEVICE`, `--device DEVICE`                                     | `0`       | Webcam device index.                                                        |
+| `-l LETTERS`, `--letters LETTERS`                                  | `2`       | Letters produced per update. (How heavy is the rain)                        |
+| `-p PROBABILITY`, `--probability PROBABILITY`                      | `5`       | Each point has a $1/p$ chance of deactivating each update. (1/evaporation)  |
+| `-u UPDATES_PER_SECOND`, `--updates-per-second UPDATES_PER_SECOND` | `15`      | Number of updates per second.                                               |
+| `--width WIDTH`                                                    | `1280`    | Requested preview width in pixels.                                          |
+| `--height HEIGHT`                                                  | `720`     | Requested preview height in pixels.                                         |
+| `--cell-size CELL_SIZE`                                            | `14`      | Matrix character-cell size in pixels. Smaller values increase detail.       |
+| `--output {preview}`                                               | `preview` | Render to a local OpenCV preview window.                                    |
 
 ## Zoom and other video apps
 
@@ -76,38 +99,16 @@ This is the supported output path for the application.
 Create a virtual environment and install the project in editable mode:
 
     $ python -m venv .venv
-    $ . .venv/bin/activate  # or .\.venv\Scripts\Activate.ps1 on Windows
+    $ . .venv/bin/activate  # Linux, macOS, or WSL
+    $ .\.venv\Scripts\Activate.ps1  # Windows PowerShell
+    $ .\.venv\Scripts\activate.bat  # Windows Command Prompt
     $ python -m pip install -e .[dev]
 
 Then run the project tests or smoke checks:
 
     $ python -m ruff check .
     $ python -m mypy matrix_webcam
-
-## License
-This project is licensed under the MIT License (see the `LICENSE` file for details).
-
-
-## Development
-
-I'd recommend creating a new virtual environment (if you are under Ubuntu install it using `sudo apt install python3-venv` using 
-
-    $ python3 -m venv venv/
-    $ source venv/bin/activate
-
-Then install the dependencies using:
-
-    $ pip install -e .[dev,deploy]
-
-Setup pre-commit, too:
-
     $ pre-commit install
-
-### TODO
-
-* [x] add webcam selection
-* [ ] Move to opencv-python-headless
-* [ ] add tests
 
 ## License
 This project is licensed under the MIT License (see the `LICENSE` file for details).
