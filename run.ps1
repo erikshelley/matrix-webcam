@@ -1,8 +1,3 @@
-param(
-    [Parameter(ValueFromRemainingArguments = $true)]
-    [string[]]$MatrixWebcamArguments
-)
-
 $ErrorActionPreference = "Stop"
 
 $venvPython = Join-Path $PSScriptRoot ".venv\Scripts\python.exe"
@@ -12,7 +7,7 @@ if (-not (Test-Path $venvPython)) {
 
 Push-Location $PSScriptRoot
 try {
-    & $venvPython -m matrix_webcam @MatrixWebcamArguments
+    & $venvPython -m matrix_webcam @args
     exit $LASTEXITCODE
 } finally {
     Pop-Location
